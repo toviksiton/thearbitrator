@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { generateResolution } from '@/lib/openai'
+import { aiRatelimit, checkRateLimit } from '@/lib/ratelimit'
+import { sendResolutionReadyEmail } from '@/lib/email'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -11,6 +13,14 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { success } = await checkRateLimit(aiRatelimit, `ai:${user.id}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: 'Too many AI requests. Please wait a minute.' },
+      { status: 429 }
+    )
   }
 
   const { disputeId } = await request.json()
@@ -26,10 +36,7 @@ export async function POST(request: Request) {
   }
 
   if (!dispute.respondent_title) {
-    return NextResponse.json(
-      { error: 'Both parties must submit' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Both parties must submit' }, { status: 400 })
   }
 
   try {
@@ -45,13 +52,11 @@ export async function POST(request: Request) {
       mediation_response: dispute.mediation_response,
     })
 
-    // Update dispute status to resolved
     await supabase
       .from('disputes')
       .update({ status: 'resolved' })
       .eq('id', disputeId)
 
-    // Save AI output
     await supabase.from('ai_outputs').insert({
       dispute_id: disputeId,
       type: 'resolution',
@@ -59,12 +64,28 @@ export async function POST(request: Request) {
       metadata: { model: 'gpt-4o' },
     })
 
+    // Notify both parties
+    const { data: participants } = await supabase
+      .from('participants')
+      .select('user_id')
+      .eq('dispute_id', disputeId)
+
+    if (participants) {
+      for (const p of participants) {
+        const { data: userData } = await supabase.auth.admin.getUserById(p.user_id)
+        if (userData.user?.email) {
+          sendResolutionReadyEmail({
+            to: userData.user.email,
+            disputeTitle: dispute.neutral_title || dispute.initiator_title,
+            disputeId,
+          }).catch(console.error)
+        }
+      }
+    }
+
     return NextResponse.json({ resolution })
   } catch (err) {
     console.error('Resolution error:', err)
-    return NextResponse.json(
-      { error: 'Resolution generation failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Resolution generation failed' }, { status: 500 })
   }
 }

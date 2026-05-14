@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Assistant } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
+import { PostHogProvider } from '@/components/providers/PostHogProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -64,7 +65,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${assistant.variable}`}>
       <body className="min-h-screen bg-slate-50 antialiased">
-        {children}
+        <PostHogProvider>
+          {children}
+        </PostHogProvider>
         <Toaster position="top-right" richColors />
       </body>
     </html>

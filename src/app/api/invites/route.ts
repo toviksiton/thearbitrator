@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendInviteEmail } from '@/lib/email'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -9,37 +10,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const inviteUrl = `${appUrl}/invite/${invite_token}`
-
-  // Using Supabase's built-in email for now
-  // In production, integrate with Resend or SendGrid
   const supabase = createServiceClient()
 
-  const { error } = await supabase.auth.admin.inviteUserByEmail(respondent_email, {
-    data: {
-      dispute_id,
-      invite_token,
-      role: 'respondent',
-    },
-    redirectTo: `${appUrl}/auth/callback?next=/disputes/${dispute_id}/respond`,
-  })
+  // Get dispute title for the email
+  const { data: dispute } = await supabase
+    .from('disputes')
+    .select('neutral_title, initiator_title')
+    .eq('id', dispute_id)
+    .single()
 
-  if (error) {
-    // Fallback: the invite link is stored in DB, user can share manually
-    console.warn('Email invite failed, storing token:', error.message)
-  }
+  const disputeTitle =
+    dispute?.neutral_title || dispute?.initiator_title || 'Dispute case'
 
-  // Store the invite URL in the dispute for manual sharing
+  // Store token
   await supabase
     .from('disputes')
     .update({ invite_token })
     .eq('id', dispute_id)
 
+  // Send branded email via Resend
+  try {
+    await sendInviteEmail({
+      to: respondent_email,
+      disputeTitle,
+      inviteToken: invite_token,
+      disputeId: dispute_id,
+    })
+  } catch (emailErr) {
+    // Log but don't fail — invite URL still works
+    console.error('Invite email failed:', emailErr)
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
   return NextResponse.json({
     success: true,
-    invite_url: inviteUrl,
-    message: 'Invitation processed',
+    invite_url: `${appUrl}/invite/${invite_token}`,
+    message: 'Invitation sent',
   })
 }
 

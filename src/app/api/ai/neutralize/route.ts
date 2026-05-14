@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { neutralizeDispute } from '@/lib/openai'
+import { aiRatelimit, checkRateLimit } from '@/lib/ratelimit'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -13,13 +14,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Rate limiting
+  const { success, remaining } = await checkRateLimit(aiRatelimit, `ai:${user.id}`)
+  if (!success) {
+    return NextResponse.json(
+      { error: 'Too many AI requests. Please wait a minute before retrying.' },
+      { status: 429, headers: { 'X-RateLimit-Remaining': String(remaining) } }
+    )
+  }
+
   const { disputeId } = await request.json()
 
   if (!disputeId) {
     return NextResponse.json({ error: 'disputeId required' }, { status: 400 })
   }
 
-  // Fetch dispute
   const { data: dispute, error: fetchError } = await supabase
     .from('disputes')
     .select('*')
@@ -45,16 +54,11 @@ export async function POST(request: Request) {
       dispute.respondent_description || ''
     )
 
-    // Update dispute with neutral title
     await supabase
       .from('disputes')
-      .update({
-        neutral_title: result.neutral_title,
-        status: 'ai_processing',
-      })
+      .update({ neutral_title: result.neutral_title, status: 'ai_processing' })
       .eq('id', disputeId)
 
-    // Save AI output
     await supabase.from('ai_outputs').insert({
       dispute_id: disputeId,
       type: 'neutral_title',
@@ -65,9 +69,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ result })
   } catch (err) {
     console.error('Neutralization error:', err)
-    return NextResponse.json(
-      { error: 'AI neutralization failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'AI neutralization failed' }, { status: 500 })
   }
 }
