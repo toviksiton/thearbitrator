@@ -57,6 +57,12 @@ export function Navbar() {
             >
               FAQ
             </Link>
+            <Link
+              href="/demo"
+              className="text-sm font-semibold text-arbitrator-600 hover:text-arbitrator-700 transition-colors"
+            >
+              Live Demo
+            </Link>
           </div>
 
           {/* Desktop CTA */}
@@ -86,6 +92,7 @@ export function Navbar() {
                 { href: '/#how-it-works', label: 'How It Works' },
                 { href: '/#features', label: 'Features' },
                 { href: '/#faq', label: 'FAQ' },
+                { href: '/demo', label: '▶ Live Demo' },
               ].map((item) => (
                 <Link
                   key={item.href}
