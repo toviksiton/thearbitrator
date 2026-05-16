@@ -23,6 +23,7 @@ export type AIOutputType =
   | 'classification'
   | 'mediation_proposal'
   | 'resolution'
+  | 'debate'
   | 'summary'
 
 export type MediationResponse = 'accepted' | 'rejected' | 'counter'
@@ -113,6 +114,33 @@ export interface AIMediationProposal {
   description: string
   terms: string[]
   rationale: string
+}
+
+export interface DisputeResearch {
+  key_claims_a: string[]
+  key_claims_b: string[]
+  verifiable_facts: string[]
+  contradictions: string[]
+  domain_context: string
+}
+
+export interface DebateRound {
+  round: number
+  topic: string
+  agent_a_argument: string
+  agent_b_argument: string
+  winner: 'A' | 'B' | 'draw'
+  judge_reasoning: string
+}
+
+export interface DebateResult {
+  research: DisputeResearch
+  rounds: DebateRound[]
+  score_a: number
+  score_b: number
+  verdict: 'A_wins' | 'B_wins' | 'compromise'
+  verdict_reasoning: string
+  resolution_guidance: string
 }
 
 export interface CreateDisputeInput {

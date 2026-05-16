@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { DisputeTimeline } from '@/components/app/DisputeTimeline'
 import { MediationPanel } from '@/components/app/MediationPanel'
 import { ResolutionDisplay } from '@/components/app/ResolutionDisplay'
+import { DebateDisplay } from '@/components/app/DebateDisplay'
 import { DisputeDetailClient } from '@/components/app/DisputeDetailClient'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,8 +16,8 @@ import {
   getCategoryLabel,
   formatDate,
 } from '@/lib/utils'
-import type { Dispute, DisputeStatus, DisputeCategory, AIResolution, AIMediationProposal } from '@/types'
-import { ArrowLeft, Scale, FileText, Paperclip, MessageSquare } from 'lucide-react'
+import type { Dispute, DisputeStatus, DisputeCategory, AIResolution, AIMediationProposal, DebateResult } from '@/types'
+import { ArrowLeft, Scale, FileText, Paperclip, MessageSquare, Swords } from 'lucide-react'
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -86,6 +87,7 @@ export default async function DisputePage({
   const neutralTitleOutput = aiOutputs?.find((o) => o.type === 'neutral_title')
   const mediationOutput = aiOutputs?.find((o) => o.type === 'mediation_proposal')
   const resolutionOutput = aiOutputs?.find((o) => o.type === 'resolution')
+  const debateOutput = aiOutputs?.find((o) => o.type === 'debate')
 
   const displayTitle = dispute.neutral_title || dispute.initiator_title
   const mediationProposal = mediationOutput
@@ -93,6 +95,9 @@ export default async function DisputePage({
     : null
   const resolution = resolutionOutput
     ? (JSON.parse(resolutionOutput.content) as AIResolution)
+    : null
+  const debateResult = debateOutput
+    ? (JSON.parse(debateOutput.content) as DebateResult)
     : null
 
   const initiatorEvidence = evidence?.filter((e) => e.role === 'initiator') ?? []
@@ -150,6 +155,12 @@ export default async function DisputePage({
                 <TabsTrigger value="mediation" className="flex-1">
                   <MessageSquare className="w-4 h-4 mr-1.5" />
                   Mediation
+                </TabsTrigger>
+              )}
+              {debateResult && (
+                <TabsTrigger value="debate" className="flex-1">
+                  <Swords className="w-4 h-4 mr-1.5" />
+                  Debate
                 </TabsTrigger>
               )}
               {resolution && (
@@ -360,6 +371,13 @@ export default async function DisputePage({
                 </Card>
               )}
             </TabsContent>
+
+            {/* Debate tab */}
+            {debateResult && (
+              <TabsContent value="debate">
+                <DebateDisplay debate={debateResult} />
+              </TabsContent>
+            )}
 
             {/* Mediation tab */}
             {mediationProposal && (
